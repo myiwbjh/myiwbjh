@@ -72,8 +72,8 @@
       <div id="dashboard" hidden>
         <div id="demoBanner" class="demo-banner" hidden><b>示例数据模式</b><span>以下数值仅用于演示分析功能，不代表 Khayrat 项目真实进展。</span><button id="clearData">清除示例</button></div>
         <section class="kpis">
-          <article><span>总体计划进度</span><b id="plannedKpi">—</b><small id="plannedNote">等待数据</small></article>
-          <article><span>总体实际进度</span><b id="actualKpi">—</b><small id="varianceNote">等待数据</small></article>
+          <article><span>WBS 加权计划进度</span><b id="plannedKpi">—</b><small id="plannedNote">无权重时不计算总体值</small></article>
+          <article><span>WBS 加权实际进度</span><b id="actualKpi">—</b><small id="varianceNote">无权重时展示分项统计</small></article>
           <article><span>当期 / 累计完成量</span><b id="concreteKpi">—</b><small id="concreteNote">按导入单位统计</small></article>
           <article><span>现场人员</span><b id="peopleKpi">—</b><small id="peopleNote">中方 — · 属地 —</small></article>
           <article class="alert-kpi"><span>连续停工预警</span><b id="stoppageKpi">—</b><small>连续 3 个有效日报日</small></article>
@@ -109,8 +109,8 @@
       </div>
 
       <section id="entryView" class="page-view" hidden>
-        <div class="entry-heading"><div><p class="eyebrow">DAILY REPORT / LOCAL RECORDS</p><h1>日报录入</h1><p>新增、编辑和查询项目日报。记录保存在本机当前浏览器的 localStorage 中，不是云端同步。</p></div><div><button id="backupButton" class="outline">⇩ 备份数据</button><button id="restoreButton" class="outline">↥ 恢复备份</button><input id="restoreInput" type="file" accept="application/json,.json" hidden></div></div>
-        <div class="storage-notice"><b>本地保存说明</b><span>数据仅保存在当前浏览器与当前电脑。清除浏览器数据可能导致记录丢失，请定期下载 JSON 备份。</span></div>
+        <div class="entry-heading"><div><p class="eyebrow">DAILY REPORT / LOCAL RECORDS</p><h1>日报录入</h1><p>新增、编辑和查询项目日报。记录保存在本机当前浏览器的 IndexedDB 中，不是云端同步。</p></div><div><button id="backupButton" class="outline">⇩ 备份数据</button><button id="restoreButton" class="outline">↥ 恢复备份</button><input id="restoreInput" type="file" accept="application/json,.json" hidden></div></div>
+        <div class="storage-notice"><b>本地保存说明</b><span>数据与图片保存在当前浏览器 IndexedDB（localStorage 仅兼容回退）。清除浏览器数据可能导致记录丢失，请定期下载 JSON 备份。</span></div>
         <section class="entry-layout">
           <form id="reportForm" class="panel report-form" novalidate>
             <div class="panel-title"><div><h2 id="formTitle">新增日报记录</h2><p>标有 * 的字段为必填项</p></div><button type="button" id="cancelEdit" class="text-button" hidden>取消编辑</button></div>
@@ -119,14 +119,18 @@
               <label>日报日期 *<input name="date" type="date" required><small data-error="date"></small></label>
               <label>车间 *<input name="workshop" list="workshopList" placeholder="例如：水泥粉磨车间" required><small data-error="workshop"></small></label>
               <label>施工工序 *<input name="process" list="processList" placeholder="例如：设备基础" required><small data-error="process"></small></label>
+              <label>活动编号<input name="activityId" placeholder="用于区分同日同工序多项活动"></label>
               <label>施工状态<select name="status"><option value="">请选择</option><option>施工中</option><option>停工</option><option>已完成</option><option>准备中</option></select></label>
               <label>中方人员<input name="chineseStaff" type="number" min="0" step="1" placeholder="0"><small data-error="chineseStaff"></small></label>
               <label>属地人员<input name="localStaff" type="number" min="0" step="1" placeholder="0"><small data-error="localStaff"></small></label>
               <label>计划进度（%）<input name="plannedProgress" type="number" min="0" max="100" step="0.1"><small data-error="plannedProgress"></small></label>
               <label>实际进度（%）<input name="actualProgress" type="number" min="0" max="100" step="0.1"><small data-error="actualProgress"></small></label>
+              <label>WBS 权重<input name="wbsWeight" type="number" min="0" step="0.001" placeholder="无基准时留空"></label>
               <label>实际完成工作量<input name="dailyConcrete" type="number" min="0" step="0.01"><small data-error="dailyConcrete"></small></label>
               <label>累计完成量<input name="cumulativeConcrete" type="number" min="0" step="0.01"><small data-error="cumulativeConcrete"></small></label>
               <label>工作量单位<input name="workUnit" placeholder="m³ / t / 项"></label>
+              <label>人员口径<select name="staffScope"><option>项目总人数</option><option>车间施工人数</option></select></label>
+              <label>工种<input name="trade" placeholder="钢筋工 / 木工 / 安装工"></label>
               <label>设备到货情况<input name="equipmentStatus" placeholder="已发运 / 已到货 / 待清关"></label>
               <label class="wide">设备名称<input name="equipmentName" placeholder="相关主要设备，可选"></label>
               <label class="wide">制约因素<textarea name="risk" rows="2" placeholder="影响施工或设备安装的主要问题"></textarea></label>
@@ -163,6 +167,7 @@
   </main>
   <div id="toast" class="toast" role="status"></div><div id="overlay" class="overlay"></div>
   <dialog id="imageDialog" class="image-dialog"><button id="closeImageDialog" class="dialog-close" aria-label="关闭">×</button><div class="image-detail"><div class="image-preview"><img id="imageFull" alt="现场证据大图"><div><b>直接证据</b><p id="directEvidence"></p></div><div class="inference"><b>规则 / AI 推断</b><p id="inferenceSummary"></p></div></div><form id="imageForm"><input type="hidden" name="imageId"><h2>证据复核</h2><p id="imageOrigin"></p><label>关联日期<input name="relatedDate" type="date"></label><label>车间<input name="relatedWorkshop"></label><label>工序<input name="relatedProcess"></label><label>关联日报记录<select name="relatedRecordId"><option value="">按日期/车间/工序自动关联</option></select></label><label>场景分类<select name="scene"><option>施工中</option><option>停工或无明显施工</option><option>材料堆放</option><option>设备到货</option><option>安装准备</option><option>已完成区域</option><option>无法判断</option></select></label><label>标签<input name="tags" placeholder="多个标签以逗号分隔"></label><label>证据类型<select name="evidenceType"><option>直接证据</option><option>AI推断</option><option>人工判断</option></select></label><label>图片说明<textarea name="caption" rows="3"></textarea></label><label class="check"><input name="critical" type="checkbox"> 标记为关键证据</label><label class="check"><input name="ignored" type="checkbox"> 忽略无关图片</label><div class="form-actions"><button type="submit" class="primary">保存人工修正</button></div></form></div></dialog>
+  <dialog id="importDialog" class="import-dialog"><h2>导入前预览</h2><p>确认后才会写入 IndexedDB；取消或解析失败不会修改已有数据。</p><div id="importSummary"></div><div class="table-scroll"><table><thead><tr><th>来源</th><th>日期</th><th>车间 / 工序</th><th>状态</th><th>处理</th></tr></thead><tbody id="importPreviewRows"></tbody></table></div><div class="form-actions"><button id="cancelImport" class="outline">取消</button><button id="confirmImport" class="primary">确认导入</button></div></dialog>
   <script type="module" src="app.js"></script>
 </body>
 </html>

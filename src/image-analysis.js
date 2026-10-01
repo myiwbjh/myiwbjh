@@ -18,7 +18,14 @@ export function analyzeImageMetadata(image) {
 }
 
 export class ImageAnalysisProvider {
-  async analyze(image) { return analyzeImageMetadata(image); }
+  constructor({ endpoint = '', consent = false, fetchImpl = fetch } = {}) { this.endpoint=endpoint; this.consent=consent; this.fetch=fetchImpl; }
+  get enabled() { return Boolean(this.endpoint && this.consent); }
+  async analyze(image) {
+    if (!this.enabled) return { ...analyzeImageMetadata(image), provider:'metadata-rules', visionEnabled:false, notice:'尚未启用真实视觉识别；当前结果不是对图片像素的识别。' };
+    const response = await this.fetch(this.endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageDataUrl:image.dataUrl,context:{sourceFile:image.sourceFile,pageNumber:image.pageNumber,nearbyText:image.nearbyText}})});
+    if(!response.ok)throw new Error(`视觉分析服务返回 ${response.status}`);const result=await response.json();
+    return {scene:SCENES.includes(result.scene)?result.scene:'无法判断',tags:Array.isArray(result.tags)?result.tags:[],visibleFacts:Array.isArray(result.visibleFacts)?result.visibleFacts:[],inferences:Array.isArray(result.inferences)?result.inferences:[],aiSummary:String(result.summary||''),confidence:Math.max(0,Math.min(1,Number(result.confidence)||0)),evidenceType:'AI推断',manualReviewed:false,reviewRecommended:true,provider:result.model||'external-vision',visionEnabled:true};
+  }
 }
 
 export function findEvidenceConflicts(record, images) {

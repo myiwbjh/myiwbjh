@@ -2,7 +2,8 @@ export const STORAGE_KEY = 'khayrat.dailyReports.v1';
 export const EVIDENCE_KEY = 'khayrat.imageEvidence.v1';
 
 export function businessKey(record) {
-  return [record.date, record.workshop, record.process].map(value => String(value || '').trim().toLowerCase()).join('|');
+  const activity = record.activityId || [record.equipmentName, record.rawRecord].filter(Boolean).join(' · ');
+  return [record.date, record.workshop, record.process, activity].map(value => String(value || '').trim().toLowerCase()).join('|');
 }
 
 export function validateRecord(record) {
