@@ -1,0 +1,14 @@
+{
+  "name": "khayrat-daily-analytics",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:e2e": "playwright test",
+    "check": "npm test && node --check app.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  }
+}
