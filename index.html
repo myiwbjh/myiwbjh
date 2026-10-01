@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Khayrat 3,200 TPD 水泥粉磨站 EPC 项目日报分析系统">
+  <title>Khayrat EPC · 工程日报分析</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="brand-mark">K</span><span>Khayrat<small>EPC PROJECT CONTROL</small></span></div>
+    <div class="project-chip"><b>3,200 TPD</b><span>水泥粉磨站 · Samawah, Iraq</span></div>
+    <nav aria-label="主导航">
+      <p>项目管理</p>
+      <a class="active" href="#overview"><span>⌂</span>工程总览</a>
+      <a href="#workshops"><span>▦</span>车间进度</a>
+      <a href="#equipment"><span>◇</span>设备跟踪</a>
+      <a href="#risks"><span>△</span>风险与制约</a>
+      <p>数据中心</p>
+      <a href="#import"><span>⇧</span>日报导入</a>
+      <a href="#evidence"><span>≡</span>停工证据</a>
+    </nav>
+    <div class="contract-card">
+      <span>设备安装目标</span><b>2026 年 12 月</b><small>合同工期起算：2026-09-07</small>
+    </div>
+    <div class="profile"><span>PM</span><div><b>项目控制中心</b><small>数据仅保存在当前浏览器</small></div></div>
+  </aside>
+
+  <main>
+    <header>
+      <button id="menuButton" class="menu" aria-label="打开菜单">☰</button>
+      <div><span class="live-dot"></span><b>Khayrat 日报分析系统</b><small id="dataStatus">尚未导入数据</small></div>
+      <button id="importTop" class="primary">＋ 导入日报</button>
+    </header>
+
+    <div class="content" id="overview">
+      <section class="hero">
+        <div><p class="eyebrow">PROJECT INTELLIGENCE / 工程日报</p><h1>项目执行驾驶舱</h1><p>基于日报原始记录，追踪施工进度、资源变化、设备准备与关键制约。</p></div>
+        <div class="hero-actions">
+          <div class="period-switch" role="group" aria-label="分析周期"><button data-period="day" class="active">日报</button><button data-period="week">周报</button><button data-period="month">月报</button></div>
+          <button id="exportButton" class="outline">⇩ 导出 CSV</button>
+        </div>
+      </section>
+
+      <section class="timeline" aria-label="项目时间基准">
+        <div class="time-item done"><i></i><span>实际现场施工起点<small>2026 年 3 月</small></span></div>
+        <div class="time-line"><span></span></div>
+        <div class="time-item contract"><i></i><span>合同工期起算<small>2026 年 9 月 7 日</small></span></div>
+        <div class="time-line muted"><span></span></div>
+        <div class="time-item target"><i></i><span>主要设备安装目标<small>2026 年 12 月</small></span></div>
+      </section>
+
+      <section class="filters">
+        <label>分析截止日期<input id="dateFilter" type="date"></label>
+        <label>车间<select id="workshopFilter"><option value="">全部车间</option></select></label>
+        <label>工序<select id="processFilter"><option value="">全部工序</option></select></label>
+        <button id="clearFilters">重置筛选</button>
+        <span id="recordCount">0 条原始记录</span>
+      </section>
+
+      <section id="emptyState" class="empty-state">
+        <span class="empty-icon">⇧</span><h2>导入工程日报，开始真实数据分析</h2>
+        <p>支持 CSV 与 Excel（.xlsx）文件。系统不会用虚构数据填充指标；也可载入带醒目标识的示例数据了解功能。</p>
+        <div><button class="primary import-trigger">选择日报文件</button><button id="demoButton" class="outline">载入示例数据</button></div>
+        <button id="templateButton" class="text-button">下载标准 CSV 模板 →</button>
+      </section>
+
+      <div id="dashboard" hidden>
+        <div id="demoBanner" class="demo-banner" hidden><b>示例数据模式</b><span>以下数值仅用于演示分析功能，不代表 Khayrat 项目真实进展。</span><button id="clearData">清除示例</button></div>
+        <section class="kpis">
+          <article><span>总体计划进度</span><b id="plannedKpi">—</b><small id="plannedNote">等待数据</small></article>
+          <article><span>总体实际进度</span><b id="actualKpi">—</b><small id="varianceNote">等待数据</small></article>
+          <article><span>当期 / 累计混凝土</span><b id="concreteKpi">—</b><small id="concreteNote">m³</small></article>
+          <article><span>现场人员</span><b id="peopleKpi">—</b><small id="peopleNote">中方 — · 属地 —</small></article>
+          <article class="alert-kpi"><span>连续停工预警</span><b id="stoppageKpi">—</b><small>连续 3 个有效日报日</small></article>
+        </section>
+
+        <section class="grid">
+          <article class="panel progress-panel">
+            <div class="panel-title"><div><h2>计划与实际进度</h2><p id="chartCaption">按分析周期对比</p></div><span class="legend"><i></i>计划 <i></i>实际</span></div>
+            <div id="trendChart" class="chart"></div>
+          </article>
+          <article class="panel workforce-panel">
+            <div class="panel-title"><div><h2>人员投入变化</h2><p>中方与属地人员对比</p></div></div>
+            <div id="workforceChart" class="workforce-chart"></div>
+          </article>
+          <article class="panel workshops-panel" id="workshops">
+            <div class="panel-title"><div><h2>主要车间施工进度</h2><p>所选日期前各车间最新状态</p></div></div>
+            <div class="table-scroll"><table><thead><tr><th>车间 / 工序</th><th>计划</th><th>实际</th><th>偏差</th><th>较上期</th><th>状态</th></tr></thead><tbody id="workshopRows"></tbody></table></div>
+          </article>
+          <article class="panel equipment-panel" id="equipment">
+            <div class="panel-title"><div><h2>主要设备状态</h2><p>发运、到货及安装准备</p></div></div>
+            <div id="equipmentList" class="equipment-list"></div>
+          </article>
+          <article class="panel risks-panel" id="risks">
+            <div class="panel-title"><div><h2>设备安装风险与制约</h2><p>从日报风险字段和滞后节点自动识别</p></div><span id="riskCount" class="count">0</span></div>
+            <div id="riskList" class="risk-list"></div>
+          </article>
+          <article class="panel evidence-panel" id="evidence">
+            <div class="panel-title"><div><h2>连续停工证据链</h2><p>规则：同一车间与工序连续 ≥ 3 个有效日报日满足停工条件</p></div></div>
+            <div id="evidenceList" class="evidence-list"></div>
+          </article>
+        </section>
+      </div>
+
+      <section class="import-panel" id="import">
+        <div><span class="import-icon">⇧</span><div><h2>日报数据导入</h2><p>可多选 CSV / XLSX；同一来源重复导入会自动去重。PDF 与 Google Drive 已预留适配器接口。</p></div></div>
+        <button class="primary import-trigger">选择文件</button>
+        <input id="fileInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
+        <div id="importLog" class="import-log" aria-live="polite"></div>
+      </section>
+      <footer>KHAYRAT 3,200 TPD CEMENT GRINDING PLANT · SAMAWAH, IRAQ <span>本地分析 · 不上传数据</span></footer>
+    </div>
+  </main>
+  <div id="toast" class="toast" role="status"></div><div id="overlay" class="overlay"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
