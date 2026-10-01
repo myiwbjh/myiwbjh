@@ -1,8 +1,8 @@
-export const FIELDS = ['reportName','date','workshop','process','plannedProgress','actualProgress','dailyConcrete','cumulativeConcrete','chineseStaff','localStaff','equipmentName','equipmentStatus','risk','status','rawRecord'];
+export const FIELDS = ['reportName','date','workshop','process','plannedProgress','actualProgress','dailyConcrete','cumulativeConcrete','workUnit','chineseStaff','localStaff','equipmentName','equipmentStatus','risk','status','rawRecord'];
 const ALIASES = {
   reportName:['日报名称','report_name','report name','report'], date:['日期','date'], workshop:['车间','workshop','area'], process:['工序','process','activity'],
-  plannedProgress:['计划进度','planned_progress','planned progress','plan'], actualProgress:['实际进度','actual_progress','actual progress','actual'], dailyConcrete:['当日混凝土','daily_concrete','daily concrete'], cumulativeConcrete:['累计混凝土','cumulative_concrete','cumulative concrete'],
-  chineseStaff:['中方人员','chinese_staff','chinese staff'], localStaff:['属地人员','local_staff','local staff'], equipmentName:['设备名称','equipment_name','equipment'], equipmentStatus:['设备状态','equipment_status'], risk:['风险制约','风险','risk','constraint'], status:['工作状态','状态','status'], rawRecord:['原始记录','raw_record','record','description']
+  plannedProgress:['计划进度','planned_progress','planned progress','plan'], actualProgress:['实际进度','actual_progress','actual progress','actual'], dailyConcrete:['实际完成工作量','当日混凝土','daily_concrete','daily concrete','daily_quantity'], cumulativeConcrete:['累计完成量','累计混凝土','cumulative_concrete','cumulative concrete','cumulative_quantity'],
+  chineseStaff:['中方人员','chinese_staff','chinese staff'], localStaff:['属地人员','local_staff','local staff'], workUnit:['工作量单位','单位','work_unit','unit'], equipmentName:['设备名称','equipment_name','equipment'], equipmentStatus:['设备到货情况','设备状态','equipment_status'], risk:['制约因素','风险制约','风险','risk','constraint'], status:['施工状态','工作状态','状态','status'], rawRecord:['备注','原始记录','raw_record','record','description']
 };
 const numericFields = new Set(['plannedProgress','actualProgress','dailyConcrete','cumulativeConcrete','chineseStaff','localStaff']);
 

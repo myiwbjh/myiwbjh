@@ -13,7 +13,9 @@
     <div class="project-chip"><b>3,200 TPD</b><span>水泥粉磨站 · Samawah, Iraq</span></div>
     <nav aria-label="主导航">
       <p>项目管理</p>
-      <a class="active" href="#overview"><span>⌂</span>工程总览</a>
+      <a class="active" href="#overview" data-view="overviewView"><span>⌂</span>工程总览</a>
+      <a href="#entry" data-view="entryView"><span>＋</span>日报录入</a>
+      <a href="#images" data-view="imagesView"><span>▧</span>图片证据</a>
       <a href="#workshops"><span>▦</span>车间进度</a>
       <a href="#equipment"><span>◇</span>设备跟踪</a>
       <a href="#risks"><span>△</span>风险与制约</a>
@@ -35,6 +37,7 @@
     </header>
 
     <div class="content" id="overview">
+      <div id="overviewView" class="page-view">
       <section class="hero">
         <div><p class="eyebrow">PROJECT INTELLIGENCE / 工程日报</p><h1>项目执行驾驶舱</h1><p>基于日报原始记录，追踪施工进度、资源变化、设备准备与关键制约。</p></div>
         <div class="hero-actions">
@@ -71,7 +74,7 @@
         <section class="kpis">
           <article><span>总体计划进度</span><b id="plannedKpi">—</b><small id="plannedNote">等待数据</small></article>
           <article><span>总体实际进度</span><b id="actualKpi">—</b><small id="varianceNote">等待数据</small></article>
-          <article><span>当期 / 累计混凝土</span><b id="concreteKpi">—</b><small id="concreteNote">m³</small></article>
+          <article><span>当期 / 累计完成量</span><b id="concreteKpi">—</b><small id="concreteNote">按导入单位统计</small></article>
           <article><span>现场人员</span><b id="peopleKpi">—</b><small id="peopleNote">中方 — · 属地 —</small></article>
           <article class="alert-kpi"><span>连续停工预警</span><b id="stoppageKpi">—</b><small>连续 3 个有效日报日</small></article>
         </section>
@@ -103,17 +106,63 @@
           </article>
         </section>
       </div>
+      </div>
+
+      <section id="entryView" class="page-view" hidden>
+        <div class="entry-heading"><div><p class="eyebrow">DAILY REPORT / LOCAL RECORDS</p><h1>日报录入</h1><p>新增、编辑和查询项目日报。记录保存在本机当前浏览器的 localStorage 中，不是云端同步。</p></div><div><button id="backupButton" class="outline">⇩ 备份数据</button><button id="restoreButton" class="outline">↥ 恢复备份</button><input id="restoreInput" type="file" accept="application/json,.json" hidden></div></div>
+        <div class="storage-notice"><b>本地保存说明</b><span>数据仅保存在当前浏览器与当前电脑。清除浏览器数据可能导致记录丢失，请定期下载 JSON 备份。</span></div>
+        <section class="entry-layout">
+          <form id="reportForm" class="panel report-form" novalidate>
+            <div class="panel-title"><div><h2 id="formTitle">新增日报记录</h2><p>标有 * 的字段为必填项</p></div><button type="button" id="cancelEdit" class="text-button" hidden>取消编辑</button></div>
+            <input type="hidden" name="id"><input type="hidden" name="createdAt">
+            <div class="form-grid">
+              <label>日报日期 *<input name="date" type="date" required><small data-error="date"></small></label>
+              <label>车间 *<input name="workshop" list="workshopList" placeholder="例如：水泥粉磨车间" required><small data-error="workshop"></small></label>
+              <label>施工工序 *<input name="process" list="processList" placeholder="例如：设备基础" required><small data-error="process"></small></label>
+              <label>施工状态<select name="status"><option value="">请选择</option><option>施工中</option><option>停工</option><option>已完成</option><option>准备中</option></select></label>
+              <label>中方人员<input name="chineseStaff" type="number" min="0" step="1" placeholder="0"><small data-error="chineseStaff"></small></label>
+              <label>属地人员<input name="localStaff" type="number" min="0" step="1" placeholder="0"><small data-error="localStaff"></small></label>
+              <label>计划进度（%）<input name="plannedProgress" type="number" min="0" max="100" step="0.1"><small data-error="plannedProgress"></small></label>
+              <label>实际进度（%）<input name="actualProgress" type="number" min="0" max="100" step="0.1"><small data-error="actualProgress"></small></label>
+              <label>实际完成工作量<input name="dailyConcrete" type="number" min="0" step="0.01"><small data-error="dailyConcrete"></small></label>
+              <label>累计完成量<input name="cumulativeConcrete" type="number" min="0" step="0.01"><small data-error="cumulativeConcrete"></small></label>
+              <label>工作量单位<input name="workUnit" placeholder="m³ / t / 项"></label>
+              <label>设备到货情况<input name="equipmentStatus" placeholder="已发运 / 已到货 / 待清关"></label>
+              <label class="wide">设备名称<input name="equipmentName" placeholder="相关主要设备，可选"></label>
+              <label class="wide">制约因素<textarea name="risk" rows="2" placeholder="影响施工或设备安装的主要问题"></textarea></label>
+              <label class="wide">备注<textarea name="rawRecord" rows="3" placeholder="填写日报原始工作记录"></textarea></label>
+            </div>
+            <div id="duplicateWarning" class="duplicate-warning" hidden></div>
+            <div class="form-actions"><button type="reset" class="outline">清空</button><button type="submit" class="primary">保存日报</button></div>
+          </form>
+          <aside class="panel entry-help"><h2>批量录入</h2><p>下载与当前字段完全匹配的 Excel 模板，填写后在工程总览中批量导入。</p><button id="excelTemplateButton" class="primary">⇩ 下载 Excel 模板</button><hr><h2>Google Drive</h2><p>只读同步适配器已经预留，需由管理员配置 Google OAuth 客户端和指定文件夹。</p><span class="planned-badge">尚未启用 · 不保存令牌</span></aside>
+        </section>
+        <section class="panel history-panel">
+          <div class="panel-title"><div><h2>历史日报查询</h2><p>查询、编辑或删除本机保存的日报</p></div><span id="localCount" class="count">0 条</span></div>
+          <div class="history-filters"><input id="historyKeyword" placeholder="搜索车间、工序或备注"><input id="historyStart" type="date"><span>至</span><input id="historyEnd" type="date"><button id="historyReset" class="outline">重置</button></div>
+          <div class="table-scroll"><table><thead><tr><th>日期</th><th>车间 / 工序</th><th>人员</th><th>完成量</th><th>状态</th><th>设备</th><th>操作</th></tr></thead><tbody id="historyRows"></tbody></table></div>
+        </section>
+        <datalist id="workshopList"></datalist><datalist id="processList"></datalist>
+      </section>
+
+      <section id="imagesView" class="page-view" hidden>
+        <div class="entry-heading"><div><p class="eyebrow">PHOTO EVIDENCE / REVIEW</p><h1>现场图片证据</h1><p>管理 PDF 提取图片、规则分析结果与日报关联。图片可见内容和自动推断始终分开展示。</p></div><span id="imageStorageCount" class="count">0 张</span></div>
+        <div class="storage-notice"><b>分析边界</b><span>当前版本不调用视觉模型。自动结果仅依据文件名、图片附近文字和人工元数据生成，必须结合原图人工复核。</span></div>
+        <section class="filters image-filters"><label>日期<input id="imageDate" type="date"></label><label>车间<select id="imageWorkshop"><option value="">全部车间</option></select></label><label>工序<select id="imageProcess"><option value="">全部工序</option></select></label><label>日报名称<input id="imageSource" placeholder="搜索文件名"></label><label class="check"><input id="criticalOnly" type="checkbox"> 仅关键证据</label><button id="imageReset">重置</button></section>
+        <div id="imageGallery" class="image-gallery"></div>
+      </section>
 
       <section class="import-panel" id="import">
-        <div><span class="import-icon">⇧</span><div><h2>日报数据导入</h2><p>可多选 CSV / XLSX；同一来源重复导入会自动去重。PDF 与 Google Drive 已预留适配器接口。</p></div></div>
+        <div><span class="import-icon">⇧</span><div><h2>日报数据导入</h2><p>可多选 CSV / XLSX / PDF；统一标准化并按日期、车间、工序去重。PDF 图片进入证据库。</p></div></div>
         <button class="primary import-trigger">选择文件</button>
-        <input id="fileInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
+        <input id="fileInput" type="file" accept=".csv,.xlsx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
         <div id="importLog" class="import-log" aria-live="polite"></div>
       </section>
       <footer>KHAYRAT 3,200 TPD CEMENT GRINDING PLANT · SAMAWAH, IRAQ <span>本地分析 · 不上传数据</span></footer>
     </div>
   </main>
   <div id="toast" class="toast" role="status"></div><div id="overlay" class="overlay"></div>
+  <dialog id="imageDialog" class="image-dialog"><button id="closeImageDialog" class="dialog-close" aria-label="关闭">×</button><div class="image-detail"><div class="image-preview"><img id="imageFull" alt="现场证据大图"><div><b>直接证据</b><p id="directEvidence"></p></div><div class="inference"><b>规则 / AI 推断</b><p id="inferenceSummary"></p></div></div><form id="imageForm"><input type="hidden" name="imageId"><h2>证据复核</h2><p id="imageOrigin"></p><label>关联日期<input name="relatedDate" type="date"></label><label>车间<input name="relatedWorkshop"></label><label>工序<input name="relatedProcess"></label><label>关联日报记录<select name="relatedRecordId"><option value="">按日期/车间/工序自动关联</option></select></label><label>场景分类<select name="scene"><option>施工中</option><option>停工或无明显施工</option><option>材料堆放</option><option>设备到货</option><option>安装准备</option><option>已完成区域</option><option>无法判断</option></select></label><label>标签<input name="tags" placeholder="多个标签以逗号分隔"></label><label>证据类型<select name="evidenceType"><option>直接证据</option><option>AI推断</option><option>人工判断</option></select></label><label>图片说明<textarea name="caption" rows="3"></textarea></label><label class="check"><input name="critical" type="checkbox"> 标记为关键证据</label><label class="check"><input name="ignored" type="checkbox"> 忽略无关图片</label><div class="form-actions"><button type="submit" class="primary">保存人工修正</button></div></form></div></dialog>
   <script type="module" src="app.js"></script>
 </body>
 </html>
