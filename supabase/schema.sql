@@ -1,0 +1,10 @@
+create extension if not exists pgcrypto;
+create table if not exists public.daily_reports (id text primary key, project_id text not null default 'khayrat', report_date date, workshop text, process text, activity_id text, source_file text, payload jsonb not null, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists public.image_evidence (image_id text primary key, project_id text not null default 'khayrat', report_id text references public.daily_reports(id) on delete set null, source_file text, page_number integer, payload jsonb not null, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists public.import_audits (import_id uuid primary key default gen_random_uuid(), project_id text not null default 'khayrat', user_id uuid default auth.uid(), files jsonb not null default '[]', result jsonb not null default '{}', created_at timestamptz not null default now());
+alter table public.daily_reports enable row level security;alter table public.image_evidence enable row level security;alter table public.import_audits enable row level security;
+create policy "authenticated reports" on public.daily_reports for all to authenticated using (true) with check (true);
+create policy "authenticated evidence" on public.image_evidence for all to authenticated using (true) with check (true);
+create policy "authenticated audits" on public.import_audits for all to authenticated using (true) with check (true);
+insert into storage.buckets(id,name,public) values('khayrat-reports','khayrat-reports',false) on conflict(id) do update set public=false;
+create policy "authenticated report objects" on storage.objects for all to authenticated using(bucket_id='khayrat-reports') with check(bucket_id='khayrat-reports');
