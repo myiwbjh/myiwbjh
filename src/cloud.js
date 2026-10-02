@@ -1,7 +1,7 @@
 export async function loadCloudConfig(fetchImpl=fetch){const response=await fetchImpl('/api/config',{headers:{Accept:'application/json'}});if(!response.ok)throw new Error(`云端配置读取失败：${response.status}`);return response.json();}
 const clean=name=>name.replace(/[^a-zA-Z0-9._-]/g,'_');
 export class SupabaseCloudRepository{
-  constructor(config,{accessToken='',fetchImpl=fetch}={}){this.config=config;this.token=accessToken;this.fetch=fetchImpl;}
+  constructor(config,{accessToken='',fetchImpl=fetch}={}){this.config=config;this.token=accessToken;this.fetch=(...args)=>Reflect.apply(fetchImpl,globalThis,args);}
   get configured(){return Boolean(this.config.supabaseUrl&&this.config.supabaseAnonKey);}
   headers(extra={}){return {apikey:this.config.supabaseAnonKey,Authorization:`Bearer ${this.token||this.config.supabaseAnonKey}`,...extra};}
   async request(path,options={}){if(!this.configured)throw new Error('尚未配置 Supabase');const response=await this.fetch(`${this.config.supabaseUrl}${path}`,{...options,headers:this.headers(options.headers)});if(!response.ok)throw new Error(`Supabase ${response.status}: ${await response.text()}`);return response;}
