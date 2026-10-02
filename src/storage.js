@@ -1,5 +1,6 @@
 export const STORAGE_KEY = 'khayrat.dailyReports.v1';
 export const EVIDENCE_KEY = 'khayrat.imageEvidence.v1';
+const stripBinary = image => { const { dataUrl, blob, rawPdf, ...metadata } = image || {}; return metadata; };
 
 export function businessKey(record) {
   const activity = record.activityId || [record.equipmentName, record.rawRecord].filter(Boolean).join(' · ');
@@ -21,9 +22,9 @@ export function validateRecord(record) {
 }
 
 export class ReportStore {
-  constructor(storage = globalThis.localStorage) { this.storage = storage; }
-  all() { try { const value = JSON.parse(this.storage.getItem(STORAGE_KEY) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } }
-  write(records) { this.storage.setItem(STORAGE_KEY, JSON.stringify(records)); return records; }
+  constructor(storage = globalThis.localStorage) { this.storage = storage; this.cache=null; }
+  all() { if(this.cache)return this.cache;try { const value = JSON.parse(this.storage.getItem(STORAGE_KEY) || '[]');this.cache=Array.isArray(value)?value:[];return this.cache; } catch { this.cache=[];return this.cache; } }
+  write(records) { this.cache=records;const safe=records.map(({sourceExcerpt,...record})=>({...record,rawRecord:String(record.rawRecord||'').slice(0,2000)}));try{this.storage.setItem(STORAGE_KEY,JSON.stringify(safe));}catch(error){if(error?.name!=='QuotaExceededError')throw error;}return records; }
   duplicate(record, excludeId = '') { return this.all().find(item => item.id !== excludeId && businessKey(item) === businessKey(record)); }
   save(record) {
     const errors = validateRecord(record); if (Object.keys(errors).length) return { ok: false, errors };
@@ -36,14 +37,15 @@ export class ReportStore {
   merge(incoming) { const rows = this.all(), keys = new Set(rows.map(businessKey)); let added = 0, skipped = 0; for (const item of incoming) { if (keys.has(businessKey(item))) { skipped++; continue; } const now = new Date().toISOString(); rows.push({ ...item, id: item.id || crypto.randomUUID(), createdAt: item.createdAt || now, updatedAt: now }); keys.add(businessKey(item)); added++; } this.write(rows); return { added, skipped, records: rows }; }
   backup() { return JSON.stringify({ format: 'khayrat-daily-reports', version: 1, exportedAt: new Date().toISOString(), records: this.all() }, null, 2); }
   restore(text) { const data = JSON.parse(text); if (data?.format !== 'khayrat-daily-reports' || data.version !== 1 || !Array.isArray(data.records)) throw new Error('不是有效的 Khayrat 备份文件'); const valid = data.records.filter(item => !Object.keys(validateRecord(item)).length); const result = this.merge(valid); return { ...result, invalid: data.records.length - valid.length }; }
-  clear() { this.storage.removeItem(STORAGE_KEY); }
+  clear() { this.cache=[];this.storage.removeItem(STORAGE_KEY); }
 }
 
 export class EvidenceStore {
-  constructor(storage = globalThis.localStorage) { this.storage = storage; }
-  all() { try { const value = JSON.parse(this.storage.getItem(EVIDENCE_KEY) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } }
-  write(items) { this.storage.setItem(EVIDENCE_KEY, JSON.stringify(items)); return items; }
-  merge(incoming) { const items = this.all(), ids = new Set(items.map(x => x.imageId)); let added = 0; for (const image of incoming) { if (ids.has(image.imageId)) continue; items.push(image); ids.add(image.imageId); added++; } this.write(items); return { added, items }; }
+  constructor(storage = globalThis.localStorage) { this.storage = storage; this.cache = null; }
+  all() { if(this.cache)return this.cache;try { const value = JSON.parse(this.storage.getItem(EVIDENCE_KEY) || '[]'); this.cache=Array.isArray(value)?value:[];return this.cache; } catch { this.cache=[];return this.cache; } }
+  setCache(items) { this.cache=Array.isArray(items)?items:[];return this.cache; }
+  write(items) { const safe=items.map(stripBinary);this.cache=safe;try{this.storage.setItem(EVIDENCE_KEY,JSON.stringify(safe));}catch(error){if(error?.name!=='QuotaExceededError')throw error;}return safe; }
+  merge(incoming) { const items = this.all().map(stripBinary), ids = new Set(items.map(x => x.imageId)); let added = 0; for (const image of incoming) { if (ids.has(image.imageId)) continue; items.push(stripBinary(image)); ids.add(image.imageId); added++; } const safe=this.write(items);return { added, items:safe }; }
   update(imageId, changes) { const items = this.all(), index = items.findIndex(x => x.imageId === imageId); if (index < 0) return null; items[index] = { ...items[index], ...changes, updatedAt: new Date().toISOString() }; this.write(items); return items[index]; }
   removeBySource(sourceFile) { this.write(this.all().filter(x => x.sourceFile !== sourceFile)); }
 }
