@@ -31,6 +31,6 @@ export async function parseWithPDFJS(buffer, sourceFile, { pdfjs, ocrProvider, a
 }
 
 export class OCRProvider {
-  constructor({ endpoint, consent, fetchImpl = fetch }) { this.endpoint=endpoint; this.consent=consent; this.fetch=fetchImpl; }
-  async recognize(page, context) { if (!this.consent) throw new Error('OCR 需要用户明确授权'); if (!this.endpoint) throw new Error('尚未配置 OCR 服务'); throw new Error('OCR Provider 需要部署端实现页面渲染与安全上传'); }
+  constructor({ endpoint, consent, accessToken='', fetchImpl = fetch }) { this.endpoint=endpoint;this.consent=consent;this.accessToken=accessToken;this.fetch=fetchImpl; }
+  async recognize(page, context) { if (!this.consent) throw new Error('OCR 需要用户明确授权'); if (!this.endpoint) throw new Error('尚未配置 OCR 服务');if(typeof document==='undefined')throw new Error('OCR 页面渲染仅能在浏览器执行');const viewport=page.getViewport({scale:1.8}),canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;const response=await this.fetch(this.endpoint,{method:'POST',headers:{'Content-Type':'application/json',...(this.accessToken?{Authorization:`Bearer ${this.accessToken}`}:{})},body:JSON.stringify({imageDataUrl:canvas.toDataURL('image/jpeg',.88),context})});if(!response.ok)throw new Error(`OCR 服务返回 ${response.status}`);return response.json(); }
 }

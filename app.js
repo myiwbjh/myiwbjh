@@ -5,6 +5,8 @@ import { createTemplateXLSX } from './src/xlsx-writer.js';
 import { parsePDFDocument } from './src/pdf.js';
 import { findEvidenceConflicts } from './src/image-analysis.js';
 import { ProjectDatabase } from './src/database.js';
+import { loadCloudConfig, SupabaseCloudRepository, tokenFromLocation } from './src/cloud.js';
+import { OCRProvider } from './src/pdfjs-adapter.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -15,6 +17,7 @@ let records = store.all();
 let period = 'day';
 let demoMode = false;
 let pendingImport = null;
+let cloud = null;
 const adapters = {
   csv: async file => ({ records: normalizeRows(parseCSV(await file.text()), file.name), images: [] }),
   xlsx: async file => ({ records: normalizeRows(await parseXLSX(await file.arrayBuffer()), file.name), images: [] }),
@@ -23,6 +26,7 @@ const adapters = {
 };
 async function syncDatabase(){try{await database.replace(store.all(),evidenceStore.all());}catch(error){console.warn('IndexedDB sync failed',error);}}
 try{const snapshot=await database.load();if(snapshot.records.length||snapshot.images.length){store.write(snapshot.records);evidenceStore.write(snapshot.images);records=snapshot.records;}else await syncDatabase();}catch(error){console.warn('IndexedDB unavailable; using localStorage fallback',error);}
+try{const config=await loadCloudConfig(),callbackToken=tokenFromLocation(),accessToken=callbackToken||sessionStorage.getItem('khayrat.supabaseAccessToken')||'';if(callbackToken){sessionStorage.setItem('khayrat.supabaseAccessToken',callbackToken);history.replaceState(null,'',location.pathname);}cloud=new SupabaseCloudRepository(config,{accessToken});$('#cloudStatus').textContent=cloud.configured?(accessToken?'云端已连接':'云端已配置 · 点击登录'):'本机模式 · 未配置云数据库';$('#cloudStatus').onclick=async()=>{if(!cloud.configured)return toast('部署环境尚未配置 Supabase',true);if(cloud.token)return toast('当前会话已连接云端');const email=prompt('请输入获准访问项目的邮箱，系统将发送登录链接：');if(!email)return;try{await cloud.requestMagicLink(email);toast('登录链接已发送，请检查邮箱');}catch(error){toast(error.message,true);}};}catch{$('#cloudStatus').textContent='本机模式 · 云端配置不可用';}
 
 function toast(message, error = false) {
   const node = $('#toast'); node.textContent = message; node.classList.toggle('error', error); node.classList.add('show');
@@ -78,20 +82,21 @@ function render() {
 }
 
 async function importFiles(files) {
-  const messages = [], imported = [], extractedImages=[];
+  files=[...files].filter(file=>/\.(csv|xlsx|pdf)$/i.test(file.name));const messages = [], imported = [], extractedImages=[];
   for (const file of files) {
-    try { const ext = file.name.split('.').pop().toLowerCase(); if (!adapters[ext]) throw new Error('暂不支持此文件类型'); const result = await adapters[ext](file); imported.push(...result.records); extractedImages.push(...result.images); messages.push(`${file.name}: ${result.records.length} 条记录，${result.images.length} 张图片${result.diagnostics?.warnings?.length?'，'+result.diagnostics.warnings.join(''):''}`); }
+    try { const ext = file.name.split('.').pop().toLowerCase(),sourceName=file.webkitRelativePath||file.name; if (!adapters[ext]) throw new Error('暂不支持此文件类型'); const allowOCR=$('#ocrConsent').checked,adapter=ext==='pdf'?async()=>parsePDFDocument(await file.arrayBuffer(),sourceName,{allowOCR,ocrProvider:allowOCR?new OCRProvider({endpoint:'/api/ocr',consent:true,accessToken:cloud?.token||''}):null}):adapters[ext],result = await adapter(file); imported.push(...result.records); extractedImages.push(...result.images); messages.push(`${sourceName}: ${result.records.length} 条记录，${result.images.length} 张图片${result.diagnostics?.warnings?.length?'，'+result.diagnostics.warnings.join(''):''}`); }
     catch (error) { messages.push(`${file.name}: 导入失败（${error.message}）`); }
   }
-  const existing=new Set(store.all().map(businessKey)),seen=new Set(),preview=imported.map(record=>{const key=businessKey(record),duplicate=existing.has(key)||seen.has(key);seen.add(key);return {record,duplicate};});pendingImport={files:[...files].map(f=>f.name),records:imported,images:extractedImages,messages};
+  const existing=new Set(store.all().map(businessKey)),seen=new Set(),preview=imported.map(record=>{const key=businessKey(record),duplicate=existing.has(key)||seen.has(key);seen.add(key);return {record,duplicate};});pendingImport={fileObjects:[...files],files:[...files].map(f=>f.webkitRelativePath||f.name),records:imported,images:extractedImages,messages};
   $('#importSummary').textContent=`解析 ${imported.length} 条记录、${extractedImages.length} 张图片；${preview.filter(x=>x.duplicate).length} 条重复将跳过；${messages.filter(x=>x.includes('失败')).length} 个文件失败。`;
   $('#importPreviewRows').innerHTML=preview.slice(0,100).map(({record,duplicate})=>`<tr><td>${escapeHTML(record.sourceFile||record.source)}</td><td>${record.date||'<span class="negative">待复核</span>'}</td><td>${escapeHTML(record.workshop||'待复核')} / ${escapeHTML(record.process||'待复核')}</td><td>${escapeHTML(record.status||'—')}</td><td><span class="tag ${duplicate?'warning':'good'}">${duplicate?'重复跳过':'新增'}</span></td></tr>`).join('')||'<tr><td colspan="5" class="mini-empty">没有可导入的结构化记录</td></tr>';$('#importDialog').showModal();
 }
 $('#cancelImport').onclick=()=>{pendingImport=null;$('#importDialog').close();toast('已取消，原有数据未修改');};
-$('#confirmImport').onclick=async()=>{if(!pendingImport)return;const batch=pendingImport;try{const result=store.merge(batch.records),imageResult=evidenceStore.merge(batch.images);records=result.records;await syncDatabase();await database.addImport({importId:crypto.randomUUID(),createdAt:new Date().toISOString(),files:batch.files,added:result.added,skipped:result.skipped,images:imageResult.added,errors:batch.messages.filter(x=>x.includes('失败'))}).catch(()=>{});demoMode=false;$('#importLog').textContent=[...batch.messages,`新增 ${result.added} 条，重复跳过 ${result.skipped} 条，新增图片 ${imageResult.added} 张`].join('；');pendingImport=null;$('#importDialog').close();populateFilters();render();renderHistory();renderImages();toast(`导入完成：${result.added} 条日报，${imageResult.added} 张图片`);}catch(error){toast(`导入事务失败：${error.message}；原有数据未删除`,true);}};
+$('#confirmImport').onclick=async()=>{if(!pendingImport)return;const batch=pendingImport,importId=crypto.randomUUID();try{const result=store.merge(batch.records),imageResult=evidenceStore.merge(batch.images);records=result.records;await syncDatabase();await database.addImport({importId,createdAt:new Date().toISOString(),files:batch.files,added:result.added,skipped:result.skipped,images:imageResult.added,errors:batch.messages.filter(x=>x.includes('失败'))}).catch(()=>{});let cloudMessage='';if(cloud?.configured){try{const pdfs=batch.fileObjects.filter(file=>/\.pdf$/i.test(file.name)),uploadPaths=[];for(const file of pdfs)uploadPaths.push(await cloud.uploadOriginal(file,importId));uploadPaths.push(...await cloud.uploadEvidenceImages(batch.images,importId));await cloud.saveBatch(result.records,imageResult.items,{importId,files:batch.files,uploadPaths});cloudMessage='；云端同步完成';}catch(error){cloudMessage=`；本地已保存，云端同步失败：${error.message}`;}}demoMode=false;$('#importLog').textContent=[...batch.messages,`新增 ${result.added} 条，重复跳过 ${result.skipped} 条，新增图片 ${imageResult.added} 张${cloudMessage}`].join('；');pendingImport=null;$('#importDialog').close();populateFilters();render();renderHistory();renderImages();toast(`导入完成：${result.added} 条日报，${imageResult.added} 张图片${cloudMessage}`);}catch(error){toast(`导入事务失败：${error.message}；原有数据未删除`,true);}};
 
 $$('.import-trigger').forEach(b => b.onclick = () => $('#fileInput').click()); $('#importTop').onclick = () => { location.hash = 'import'; $('#fileInput').click(); };
 $('#fileInput').onchange = event => importFiles([...event.target.files]);
+$('#folderImportButton').onclick=()=>$('#folderInput').click();$('#folderInput').onchange=event=>importFiles([...event.target.files].filter(file=>/\.pdf$/i.test(file.name)));
 $$('.period-switch button').forEach(b => b.onclick = () => { $$('.period-switch button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); period=b.dataset.period; render(); });
 ['dateFilter','workshopFilter','processFilter'].forEach(id => $(`#${id}`).onchange = render);
 $('#clearFilters').onclick = () => { $('#dateFilter').value = records.map(r=>r.date).sort().at(-1)||''; $('#workshopFilter').value=''; $('#processFilter').value=''; render(); };

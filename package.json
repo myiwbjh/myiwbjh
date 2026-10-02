@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "cloud:preflight": "node scripts/cloud-preflight.mjs",
     "test": "node --test",
     "test:e2e": "playwright test",
     "check": "npm test && node --check app.js"

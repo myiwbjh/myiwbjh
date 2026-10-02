@@ -2,6 +2,57 @@
 
 面向伊拉克 Samawah **Khayrat 3,200 TPD 水泥粉磨站 EPC 项目**的本地化日报分析原型。系统默认不显示虚构项目数据；导入真实日报后才计算指标。内置数据仅用于演示，并始终显示“示例数据模式”。
 
+## 推荐部署：Vercel + Supabase
+
+正式用户只需要浏览器，不需要在 Windows 安装 Node.js、Python 或运行开发环境。推荐由管理员完成一次云端部署：Vercel 托管静态前端和 OCR/视觉服务代理，Supabase 提供邮箱登录、Postgres 数据库和私有对象存储。
+
+### 需要准备的账号
+
+1. GitHub、GitLab 或 Bitbucket 账号及本仓库访问权限。
+2. Vercel 账号，用于导入仓库和发布公开 HTTPS 地址。
+3. Supabase 项目，用于 Auth、Postgres 和 Storage。
+4. 可选 OCR/视觉服务账号；仅扫描日报或真实图片识别需要。
+
+### 部署步骤
+
+1. 在 Supabase SQL Editor 执行 `supabase/schema.sql`，创建带 RLS 的日报、图片、导入审计表及私有 `khayrat-reports` bucket。
+2. 在 Supabase Auth 中启用 Email 登录，并把 Vercel 正式域名加入允许的 Redirect URLs。
+3. 在 Vercel 选择 **Add New → Project**，导入本仓库。项目会读取 `vercel.json`，运行 `npm run build` 并发布 `dist/`。
+4. 在 Vercel Project Settings → Environment Variables 配置下表变量，然后重新部署。
+5. 建议正式项目启用 Vercel Deployment Protection 或组织级 SSO；应用数据层还会通过 Supabase Auth 与 RLS 拒绝匿名读写。
+6. 打开 Vercel 分配的 HTTPS 地址，点击页头“云端已配置 · 点击登录”，输入获准邮箱并通过邮件链接登录。
+
+### 环境变量
+
+| 名称 | 必需 | 保存位置 | 说明 |
+|---|---|---|---|
+| `SUPABASE_URL` | 云存储必需 | Vercel | Supabase Project URL |
+| `SUPABASE_ANON_KEY` | 云存储必需 | Vercel | 可公开的 anon key；安全性依赖 RLS，不是 service-role key |
+| `SUPABASE_STORAGE_BUCKET` | 否 | Vercel | 默认 `khayrat-reports` |
+| `ACCESS_CONTROL_REQUIRED` | 建议 | Vercel | 正式环境保持 `true`；OCR/视觉代理要求 Authorization |
+| `OCR_API_URL` | 扫描 PDF 可选 | Vercel | 后端 OCR 服务地址 |
+| `OCR_API_KEY` | 扫描 PDF 可选 | **仅 Vercel 服务端** | 不会发送到浏览器 |
+| `VISION_API_URL` | 视觉识别可选 | Vercel | 后端视觉服务地址 |
+| `VISION_API_KEY` | 视觉识别可选 | **仅 Vercel 服务端** | 不会发送到浏览器 |
+
+不得把 Supabase `service_role`、OCR 或视觉服务密钥放入 `app.js`、GitHub 仓库或任何 `VITE_*`/公开前端变量。`/api/config` 只返回允许公开的 URL、anon key 和功能开关。
+
+### 必须由管理员手动完成
+
+- 创建 Supabase 与 Vercel 项目、执行 SQL、配置 Redirect URL 和环境变量。
+- 邀请或批准可访问项目的邮箱用户。
+- 决定并配置 Vercel Deployment Protection。
+- 如需扫描件 OCR 或真实视觉识别，选择合规服务、签订数据处理协议并配置服务端密钥。
+- 上传一批脱敏真实日报，按本文“使用真实 PDF 验收”逐项签字确认识别准确率。
+
+授权完成后可运行不会打印密钥值的部署前检查：
+
+```bash
+npm run cloud:preflight
+```
+
+它会检查必要变量是否存在，以及 GitHub、Vercel、Supabase API 是否可达；任一必要条件缺失时返回非零退出码，避免把“配置文件已准备”误报为“云端已部署”。
+
 ## 启动
 
 ```bash
@@ -37,8 +88,9 @@ Start-Process http://localhost:4173
 - 手工录入和批量导入数据持久化到当前浏览器 IndexedDB，并保留 `localStorage` 兼容回退；导入时使用活动级业务键跳过真正的重复项。
 - 本地数据 JSON 备份与恢复；恢复时校验格式、记录有效性并跳过重复项。
 - 浏览器端生成可直接填写并可被系统重新读取的标准 `.xlsx` 模板。
-- 数据只保存在当前电脑的当前浏览器中，不上传服务器，也不称为云端同步。
+- 未配置云端时数据只保存在当前浏览器；配置 Supabase 且用户登录后，原始文件和分析数据会同步到项目私有云存储，界面会明确显示连接状态和失败信息。
 - PDF 默认尝试使用 PDF.js 提取多页、中英文和带位置的文本，内置解析器作为离线降级，并提取 PDF 中的 JPEG/JPX 嵌入图片；日报、页码、原始文本摘要、来源位置和提取方式随记录保留。
+- 浏览器可多选 PDF，也可选择包含子目录的整个日报文件夹；相对路径作为来源保留，原始 PDF 上传到私有对象存储。
 - “图片证据”页面支持缩略图、大图、日期/车间/工序/日报筛选、关键证据、忽略、人工改标签、场景、证据类型及日报关联。
 - 图片证据可关联车间进度、设备到货/安装准备、风险和连续停工记录；日报文本与图片场景冲突时显示“待人工复核”。
 
@@ -71,7 +123,7 @@ CSV 首行或 Excel 首行是字段名。支持以下中文名，也支持代码
 5. 人工复核可以修改日期、车间、工序、关联日报、场景、标签、说明和证据类型，也可以标为关键证据或忽略。
 6. 无论置信度高低，AI 推断都不能单独作为停工、设备到货或质量验收结论；最终状态必须人工确认或有其他直接记录支撑。
 
-日报、图片及导入审计记录写入当前浏览器 IndexedDB；`localStorage` 仅作为旧数据迁移和不支持 IndexedDB 时的兼容回退。跨设备共享仍需后端对象存储。
+日报、图片及导入审计记录先事务写入当前浏览器 IndexedDB；配置云端后，同批原始 PDF、结构化日报、图片元数据和审计结果同步到 Supabase，以便跨设备访问。云端失败时本地数据仍保留并明确报告失败原因。
 
 ## 本地数据与防重复规则
 
@@ -156,6 +208,6 @@ CI 或测试电脑需要能够安装 Chromium。本项目不会用 HTTP 冒烟�
 - Flate 压缩原始像素图、JBIG2 等 PDF 图片格式的浏览器转换；当前图片提取聚焦 JPEG/JPX 嵌入图。
 - 真正读取图片像素的高级视觉模型；当前版本为规则、邻近文字和人工标注工作流。
 - Google Identity Services 的实际 UI 授权和 Google Drive 在线同步（当前只有可测试的只读适配器骨架）。
-- 后端数据库、多人权限、跨设备持久化。
+- 精细项目角色、审批流及多人同时编辑的冲突解决；当前云端权限为 authenticated 项目成员统一策略。
 - 从 Primavera P6 / Microsoft Project 自动导入 WBS 基准；当前可通过日报字段或模板提供 WBS 权重。
 - XLSX 解析器目前读取首个工作表，不处理宏、公式计算结果之外的公式求值、合并单元格语义和旧版 `.xls`。

@@ -26,13 +26,13 @@
     <div class="contract-card">
       <span>设备安装目标</span><b>2026 年 12 月</b><small>合同工期起算：2026-09-07</small>
     </div>
-    <div class="profile"><span>PM</span><div><b>项目控制中心</b><small>数据仅保存在当前浏览器</small></div></div>
+    <div class="profile"><span>PM</span><div><b>项目控制中心</b><small>IndexedDB 缓存 · 可选云端同步</small></div></div>
   </aside>
 
   <main>
     <header>
       <button id="menuButton" class="menu" aria-label="打开菜单">☰</button>
-      <div><span class="live-dot"></span><b>Khayrat 日报分析系统</b><small id="dataStatus">尚未导入数据</small></div>
+      <div><span class="live-dot"></span><b>Khayrat 日报分析系统</b><small id="dataStatus">尚未导入数据</small><small id="cloudStatus">正在检查云端配置</small></div>
       <button id="importTop" class="primary">＋ 导入日报</button>
     </header>
 
@@ -158,11 +158,12 @@
 
       <section class="import-panel" id="import">
         <div><span class="import-icon">⇧</span><div><h2>日报数据导入</h2><p>可多选 CSV / XLSX / PDF；统一标准化并按日期、车间、工序去重。PDF 图片进入证据库。</p></div></div>
-        <button class="primary import-trigger">选择文件</button>
+        <div class="import-actions"><label class="ocr-consent"><input id="ocrConsent" type="checkbox"> 授权扫描页发送至已配置 OCR 服务</label><button class="primary import-trigger">选择文件</button><button id="folderImportButton" class="outline">选择 PDF 文件夹</button></div>
         <input id="fileInput" type="file" accept=".csv,.xlsx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
+        <input id="folderInput" type="file" accept=".pdf,application/pdf" webkitdirectory directory multiple hidden>
         <div id="importLog" class="import-log" aria-live="polite"></div>
       </section>
-      <footer>KHAYRAT 3,200 TPD CEMENT GRINDING PLANT · SAMAWAH, IRAQ <span>本地分析 · 不上传数据</span></footer>
+      <footer>KHAYRAT 3,200 TPD CEMENT GRINDING PLANT · SAMAWAH, IRAQ <span>云端配置可见 · 上传需授权</span></footer>
     </div>
   </main>
   <div id="toast" class="toast" role="status"></div><div id="overlay" class="overlay"></div>
