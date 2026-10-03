@@ -1,3 +1,4 @@
+import { withProvenance } from './report-model.js';
 import { normalizeRows } from './analytics.js';
 import { analyzeImageMetadata } from './image-analysis.js';
 import { businessKey } from './storage.js';
@@ -7,14 +8,29 @@ const utf8 = new TextDecoder();
 function unescapePDF(value) { return value.replace(/\\([nrtbf()\\])/g,(_,c)=>({n:'\n',r:'\r',t:'\t',b:'\b',f:'\f'}[c]||c)).replace(/\\\r?\n/g,'').replace(/\\([0-7]{1,3})/g,(_,n)=>String.fromCharCode(parseInt(n,8))); }
 function textOperators(content) { const chunks=[]; for(const block of content.matchAll(/BT([\s\S]*?)ET/g)){for(const token of block[1].matchAll(/\((?:\\.|[^\\)])*\)|<([0-9A-Fa-f\s]+)>/g)){if(token[0][0]==='(')chunks.push(unescapePDF(token[0].slice(1,-1)));else if(token[1]){const bytes=token[1].replace(/\s/g,'').match(/.{1,2}/g)?.map(x=>parseInt(x,16))||[];chunks.push(utf8.decode(new Uint8Array(bytes)));}}}return chunks.join(' ').replace(/\s+/g,' ').trim(); }
 async function streamData(object) { const marker=/stream\r?\n/.exec(object.raw); if(!marker)return null;const start=marker.index+marker[0].length,end=object.raw.lastIndexOf('endstream');let bytes=object.bytes.slice(start,end);if(/\/FlateDecode/.test(object.dict)){try{const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));bytes=new Uint8Array(await new Response(stream).arrayBuffer());}catch{return null;}}return bytes; }
-const FIELD_BOUNDARY='日报名称|Report Name|日期|Date|车间|Workshop|Area|工序|Process|Activity|计划进度|Planned Progress|实际进度|Actual Progress|当日混凝土|实际完成工作量|Daily Concrete|累计混凝土|累计完成量|Cumulative Concrete|中方人员|Chinese Staff|属地人员|Local Staff|设备名称|Equipment|设备状态|设备到货情况|Equipment Status|风险制约|制约因素|Risk|Constraint|工作状态|施工状态|Status';
-function field(text,names){for(const name of names){const escaped=name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),m=new RegExp(`(?:^|[\\s|])${escaped}\\s*[:：]\\s*(.*?)(?=\\s+(?:${FIELD_BOUNDARY})\\s*[:：]|[|\\n;；]|$)`,'i').exec(text);if(m)return m[1].trim();}return '';}
-export function mapPDFText(text,meta={}) { const row={
-  '日报名称':field(text,['日报名称','Report Name'])||meta.sourceFile||'', '日期':field(text,['日期','Date']), '车间':field(text,['车间','Workshop','Area']), '工序':field(text,['工序','Process','Activity']),
-  '计划进度':field(text,['计划进度','Planned Progress']), '实际进度':field(text,['实际进度','Actual Progress']), '当日混凝土':field(text,['当日混凝土','实际完成工作量','Daily Concrete']), '累计混凝土':field(text,['累计混凝土','累计完成量','Cumulative Concrete']),
-  '中方人员':field(text,['中方人员','Chinese Staff']), '属地人员':field(text,['属地人员','Local Staff']), '设备名称':field(text,['设备名称','Equipment']), '设备状态':field(text,['设备状态','设备到货情况','Equipment Status']),
-  '风险制约':field(text,['风险制约','制约因素','Risk','Constraint']), '工作状态':field(text,['工作状态','施工状态','Status']), '原始记录':text
- }; return normalizeRows([row],meta.sourceFile,{allowIncomplete:true}).map(record=>({...record,sourceType:'pdf',sourceFile:meta.sourceFile,pageNumber:meta.pageNumber,sourceExcerpt:text,extractionMethod:meta.extractionMethod||'built-in-text',reviewFields:['date','workshop','process'].filter(field=>!record[field])})); }
+const PDF_LABELS={
+  reportName:['日报名称','Report Name'], date:['日期','报告日期','Date','Report Date'], workshop:['车间','Workshop','Area'], process:['工序','Process','Activity'],
+  constructionContent:['施工内容','Construction Content','Work Description'], activityId:['活动编号','Activity ID'],
+  plannedProgress:['计划进度','Planned Progress'],actualProgress:['实际进度','Actual Progress'],dailyConcrete:['当日混凝土','实际完成工作量','完成工程量','Daily Concrete','Daily Quantity'],cumulativeConcrete:['累计混凝土','累计完成量','Cumulative Concrete','Cumulative Quantity'],
+  workUnit:['工作量单位','单位','Unit'], staffScope:['人员口径','Staff Scope'],chineseStaff:['中方人员','Chinese Staff'],localStaff:['属地人员','Local Staff'],equipmentName:['设备名称','Equipment'],equipmentStatus:['设备状态','设备到货情况','Equipment Status'],risk:['风险制约','制约因素','存在问题','Risk','Constraint','Issues'],status:['工作状态','施工状态','Status']
+};
+const labels=Object.entries(PDF_LABELS).flatMap(([field,names])=>names.map(label=>({field,label}))).sort((a,b)=>b.label.length-a.label.length);
+const escapeRE=text=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+// Tokenize labels once: "Equipment Status" must not become a construction "Status".
+export function mapPDFText(text,meta={}) {
+  if(!text.trim())return [];
+  const expression=new RegExp(`(?:^|[\\s|;；])(${labels.map(x=>escapeRE(x.label)).join('|')})\\s*[:：]\\s*`,'gi');
+  const matches=[...text.matchAll(expression)], row={'原始记录':text}, repeated=new Set();
+  for(let index=0;index<matches.length;index++){
+    const match=matches[index],field=labels.find(x=>x.label.toLowerCase()===match[1].toLowerCase()).field;
+    if(Object.hasOwn(row,field)){repeated.add(field);continue;}
+    row[field]=text.slice(match.index+match[0].length,matches[index+1]?.index??text.length).split(/[|;；\n]/)[0].trim();
+  }
+  // Use canonical aliases to pass through the same structured normalizer.
+  const aliases={reportName:'report_name',constructionContent:'construction_content',plannedProgress:'planned_progress',actualProgress:'actual_progress',dailyConcrete:'daily_quantity',cumulativeConcrete:'cumulative_quantity',workUnit:'work_unit',staffScope:'staff_scope',chineseStaff:'chinese_staff',localStaff:'local_staff',equipmentName:'equipment_name',equipmentStatus:'equipment_status',activityId:'activity_id'};
+  const normalized=Object.fromEntries(Object.entries(row).map(([key,value])=>[aliases[key]||key,value]));
+  return normalizeRows([normalized],meta.sourceFile,{allowIncomplete:true}).map(record=>withProvenance({...record,sourceType:'pdf',sourceFile:meta.sourceFile,pageNumber:meta.pageNumber,sourceRow:null,sourceExcerpt:text,extractionMethod:meta.extractionMethod||'built-in-text',reviewFields:[...(record.reviewFields||[]),...repeated]},meta));
+}
 function tableRows(text,meta){const lines=text.split(/\n|\r/).map(x=>x.trim()).filter(Boolean),result=[];for(let i=0;i<lines.length-1;i++){const headers=lines[i].split(/\s*\|\s*|\t+/),values=lines[i+1].split(/\s*\|\s*|\t+/);if(headers.length>=3&&headers.length===values.length&&headers.some(x=>/日期|Date/i.test(x)))result.push(...normalizeRows([Object.fromEntries(headers.map((h,j)=>[h,values[j]]))],meta.sourceFile).map(r=>({...r,sourceType:'pdf',sourceFile:meta.sourceFile,pageNumber:meta.pageNumber,sourceExcerpt:lines.slice(i,i+2).join('\n')})));}return result;}
 function hash(text){let h=2166136261;for(let i=0;i<text.length;i++)h=Math.imul(h^text.charCodeAt(i),16777619);return (h>>>0).toString(36);}
 function dataURL(bytes,mime){let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return `data:${mime};base64,${btoa(binary)}`;}
@@ -30,12 +46,11 @@ export async function parsePDF(buffer, sourceFile='report.pdf') {
 }
 
 export async function parsePDFDocument(buffer, sourceFile='report.pdf', options={}) {
-  const fallback = await parsePDF(buffer, sourceFile);
   try {
-    const { parseWithPDFJS } = await import('./pdfjs-adapter.js');
-    const mature = await parseWithPDFJS(buffer, sourceFile, options);
-    return { ...fallback, records:mature.records.length?mature.records:fallback.records, diagnostics:{...fallback.diagnostics,...mature.diagnostics,warnings:[...(mature.diagnostics.warnings||[]),...(fallback.diagnostics.warnings||[])]} };
-  } catch (error) {
-    return { ...fallback, diagnostics:{...fallback.diagnostics,engine:'built-in fallback',warnings:[...(fallback.diagnostics.warnings||[]),`PDF.js 不可用：${error.message}`]} };
+    const {parseWithPDFJS}=await import('./pdfjs-adapter.js');
+    return await parseWithPDFJS(buffer,sourceFile,options);
+  } catch(error){
+    const fallback=await parsePDF(buffer,sourceFile);
+    return {...fallback,records:fallback.records.map(r=>withProvenance({...r,reviewFields:[...new Set([...(r.reviewFields||[]),'textExtraction'])]})),diagnostics:{...fallback.diagnostics,engine:'built-in fallback',warnings:[...fallback.diagnostics.warnings,`PDF.js 解析失败，已降级；文字和图片需人工核对：${error.message}`]}};
   }
 }

@@ -11,6 +11,15 @@
     "check": "npm test && node --check app.js"
   },
   "devDependencies": {
-    "@playwright/test": "1.55.0"
+    "@playwright/test": "1.55.0",
+    "esbuild": "0.25.12",
+    "fake-indexeddb": "6.2.4"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.2",
+    "pdfjs-dist": "6.3.289"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
